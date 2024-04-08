@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "id-fastcore"
+  site-url: "https://Iamalos.github.io/id-fastcore"
+  description: "Recreating fastcore (fastai) to better understand python, coding techniques and nbdev"
+  repo-branch: main
+  repo-url: "https://github.com/Iamalos/id-fastcore"
