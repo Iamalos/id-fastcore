@@ -3,7 +3,9 @@
 # %% auto 0
 __all__ = ['defaults', 'null', 'ifnone', 'maybe_attr', 'basic_repr', 'is_array', 'listify', 'tuplify', 'true', 'NullType',
            'tonull', 'get_class', 'mk_class', 'wrap_class', 'ignore_exceptions', 'exec_local', 'risinstance', 'Inf',
-           'in_', 'ret_true', 'lt', 'gt', 'le', 'ge', 'eq', 'ne', 'add', 'sub', 'mul', 'truediv', 'is_', 'is_not']
+           'in_', 'ret_true', 'ret_false', 'stop', 'gen', 'chunked', 'otherwise', 'custom_dir', 'AttrDict', 'NS',
+           'partition', 'flatten', 'concat', 'strcat', 'detuplify', 'replicate', 'lt', 'gt', 'le', 'ge', 'eq', 'ne',
+           'add', 'sub', 'mul', 'truediv', 'is_', 'is_not', 'mod']
 
 # %% ../nbs/01_basics.ipynb 1
 from .imports import *
@@ -195,12 +197,105 @@ def in_(x, a):
 operator.in_ = in_
 
 # %% ../nbs/01_basics.ipynb 80
-_all_ = ['lt','gt','le','ge','eq','ne','add','sub','mul','truediv','is_','is_not','in_']
+_all_ = ['lt','gt','le','ge','eq','ne','add','sub','mul','truediv','is_','is_not','in_', 'mod']
 
 # %% ../nbs/01_basics.ipynb 81
-for op in ['lt','gt','le','ge','eq','ne','add','sub','mul','truediv','is_','is_not','in_']: _mk_op(op, globals())
+for op in ['lt','gt','le','ge','eq','ne','add','sub','mul','truediv','is_','is_not','in_', 'mod']: _mk_op(op, globals())
 
 # %% ../nbs/01_basics.ipynb 86
 def ret_true(*args, **kwargs):
     "Predicate: always `True`"
     return True
+
+# %% ../nbs/01_basics.ipynb 88
+def ret_false(*args, **kwargs):
+    "Predicate: always `False`"
+    return False
+
+# %% ../nbs/01_basics.ipynb 90
+def stop(e=StopIteration):
+    "Raises exception `e` (by default `StopException`)"
+    raise e
+
+# %% ../nbs/01_basics.ipynb 91
+def gen(func, seq, cond=ret_true):
+    "Like `(func(o) for o in seq if cond(func(o)))` but handles `StopIteration`"
+    return itertools.takewhile(cond, map(func,seq))
+
+# %% ../nbs/01_basics.ipynb 93
+def chunked(it, chunk_sz=None, drop_last=False, n_chunks=None):
+    "Return batches from iterator `it` of size `chunk_sz` (or return `n_chunks` total)"
+    # either `chunk_sz` is provided or `n_chunks`, not both
+    assert bool(chunk_sz) ^ bool(n_chunks)
+    if n_chunks: chunk_sz = max(math.ceil(len(it) / n_chunks), 1)
+    if not isinstance(it, Iterator): it = iter(it)
+    while True:
+        res = list(itertools.islice(it, chunk_sz))
+        if res and (len(res) == chunk_sz or not drop_last): yield res
+        if len(res) < chunk_sz: return
+
+# %% ../nbs/01_basics.ipynb 96
+def otherwise(x, tst, y):
+    "`y if tst(x) else x`"
+    return y if tst(x) else x
+
+# %% ../nbs/01_basics.ipynb 100
+def custom_dir(c, add):
+    "Implement custom `__dir__`, adding `add` to `cls`"
+    return object.__dir__(c) + listify(add)
+
+# %% ../nbs/01_basics.ipynb 103
+class AttrDict(dict):
+    "`dict` subclass that also provides access to keys as attrs"
+    def __getattr__(self, k): return self[k] if k in self.keys() else stop(AttributeError(k))
+    # choose what method to use based on the key (if it starts with _ or not)
+    def __setattr__(self, k, v): (self.__setitem__, super().__setattr__)[k[0]=='_'](k,v)
+    def __dir__(self): return super().__dir__() + list(self.keys())
+    # to display in Jupyter Notebook
+    def _repr_markdown_(self): return f'```json\n{pprint.pformat(self, indent=2)}\n```'
+
+# %% ../nbs/01_basics.ipynb 109
+class NS(SimpleNamespace):
+    "`SimpleNamespace` subclass that also adds `iter` and `dict` support"
+    def __iter__(self): return iter(self.__dict__)
+    def __getitem__(self, x): return self.__dict__[x]
+    def __setitem__(self, x, y): self.__dict__[x] = y
+
+# %% ../nbs/01_basics.ipynb 117
+def partition(coll, f):
+    "Partition a collection by a predicate"
+    # truthes and falses
+    ts, fs = [], []
+    for o in coll: (fs, ts)[f(o)].append(o)
+    if isinstance(coll, tuple):
+        typ = type(coll)
+        ts, fs = typ(ts), typ(fs)
+    return ts, fs
+
+# %% ../nbs/01_basics.ipynb 119
+def flatten(o):
+    "Concatenate all collections and items as a generator"
+    for item in o:
+        if isinstance(item, str): yield item; continue
+        try: yield from flatten(item)
+        except TypeError: yield item
+
+# %% ../nbs/01_basics.ipynb 121
+def concat(colls)->list:
+    "Concatenate all collections and items as a list"
+    return list(flatten(colls))
+
+# %% ../nbs/01_basics.ipynb 124
+def strcat(its, sep:str='')->str:
+    "Concatenate stringified items `its`"
+    return sep.join(map(str,its))
+
+# %% ../nbs/01_basics.ipynb 126
+def detuplify(x):
+    "If `x` is a tuple with one thing, extract it"
+    return None if len(x)==0 else x[0] if len(x)==1 and getattr(x, 'ndim', 1)==1 else x
+
+# %% ../nbs/01_basics.ipynb 128
+def replicate(item, match):
+    "Create tuple of `item` copied `len(match)` times"
+    return (item,) * len(match)
