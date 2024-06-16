@@ -4,8 +4,10 @@
 __all__ = ['defaults', 'null', 'ifnone', 'maybe_attr', 'basic_repr', 'is_array', 'listify', 'tuplify', 'true', 'NullType',
            'tonull', 'get_class', 'mk_class', 'wrap_class', 'ignore_exceptions', 'exec_local', 'risinstance', 'Inf',
            'in_', 'ret_true', 'ret_false', 'stop', 'gen', 'chunked', 'otherwise', 'custom_dir', 'AttrDict', 'NS',
-           'partition', 'flatten', 'concat', 'strcat', 'detuplify', 'replicate', 'lt', 'gt', 'le', 'ge', 'eq', 'ne',
-           'add', 'sub', 'mul', 'truediv', 'is_', 'is_not', 'mod']
+           'partition', 'flatten', 'concat', 'strcat', 'detuplify', 'replicate', 'setify', 'merge', 'range_of',
+           'groupby', 'last_index', 'filter_dict', 'filter_keys', 'filter_values', 'cycle', 'zip_cycle', 'sorted_ex',
+           'not_', 'argwhere', 'filter_ex', 'renumerate', 'only', 'lt', 'gt', 'le', 'ge', 'eq', 'ne', 'add', 'sub',
+           'mul', 'truediv', 'is_', 'is_not', 'mod']
 
 # %% ../nbs/01_basics.ipynb 1
 from .imports import *
@@ -299,3 +301,114 @@ def detuplify(x):
 def replicate(item, match):
     "Create tuple of `item` copied `len(match)` times"
     return (item,) * len(match)
+
+# %% ../nbs/01_basics.ipynb 130
+def setify(o):
+    "Turn any list like-object into a set."
+    return o if isinstance(o, set) else set(listify(o))
+
+# %% ../nbs/01_basics.ipynb 132
+def merge(*ds):
+    "Merge all dictionaries in `ds`"
+    return {k:v for d in ds if d is not None for k,v in d.items()}
+
+# %% ../nbs/01_basics.ipynb 134
+def range_of(x):
+    "All indices of collection `x` (i.e. `list(range(len(x)))`)"
+    return list(range(len(x)))
+
+# %% ../nbs/01_basics.ipynb 138
+def groupby(x, key, val=noop):
+    "Like `itertools.groupby` but doesn't need to be sorted, and isn't lazy, plus some extensions. x is iterable"
+    if   isinstance(key, int): key = itemgetter(key)
+    elif isinstance(key, str): key = attrgetter(key)
+    if   isinstance(val, int): val = itemgetter(val)
+    elif isinstance(val, str): val = attrgetter(val)
+    res = {}
+    # setdefault return default ([]) if there is no key. Else returns value
+    for o in x: res.setdefault(key(o), []).append(val(o))
+    return res
+
+# %% ../nbs/01_basics.ipynb 143
+def last_index(x, o):
+    "Finds the last index of occurence of `x` in `o` (returns -1 if no occurence)"
+    try: return next(i for i in reversed(range(len(o))) if o[i] == x)
+    except StopIteration: return -1
+
+# %% ../nbs/01_basics.ipynb 145
+def filter_dict(d, func):
+    "Filter a `dict` using `func`, applied to keys and values"
+    return {k:v for k,v in d.items() if func(k,v)}
+
+# %% ../nbs/01_basics.ipynb 148
+def filter_keys(d, func):
+    "Filter a `dict` using `func`, applied to keys"
+    return {k:v for k,v in d.items() if func(k)}
+
+# %% ../nbs/01_basics.ipynb 150
+def filter_values(d, func):
+    "Filter a `dict` using `func`, applied to values"
+    return {k:v for k,v in d.items() if func(v)}
+
+# %% ../nbs/01_basics.ipynb 152
+def cycle(o):
+    "Like `itertools.cycle` except creates list of `None`s if `o` is empty"
+    o = listify(o)
+    return itertools.cycle(o) if o is not None and len(o) > 0 else itertools.cycle([None])
+
+# %% ../nbs/01_basics.ipynb 154
+def zip_cycle(x, *args):
+    "Like `itertools.zip_longest` but `cycle`s through elements of all but first argument"
+    return zip(x, *map(itertools.cycle,args))
+
+# %% ../nbs/01_basics.ipynb 158
+def sorted_ex(iterable, key=None, reverse=False):
+    "Like `sorted`, but if key is str use `attrgetter`; if int use `itemgetter`"
+    if isinstance(key, str): k = lambda o: getattr(o,k,0)
+    if isinstance(key, int): k = itemgetter(key)
+    else: k=key
+    return sorted(iterable, key=k, reverse=reverse)
+
+# %% ../nbs/01_basics.ipynb 159
+def not_(f):
+    "Create new function that negates result of `f`"
+    def _f(*args, **kwargs): return not f(*args, **kwargs)
+    return  _f
+
+# %% ../nbs/01_basics.ipynb 161
+def argwhere(iterable, f, negate=False, **kwargs):
+    "Like `filter_ex`, but return indices for matching items"
+    if kwargs: f = partial(f, **kwargs)
+    if negate: f = not_(f)
+    return [i for i,o in enumerate(iterable) if f(o)]
+
+# %% ../nbs/01_basics.ipynb 162
+def filter_ex(iterable, f=noop, negate=False, gen=False, **kwargs):
+    "Like `filter`, but passing `kwargs` to `f`, defaulting `f` to `noop`, and adding `negate` and `gen`"
+    if f is None: f = lambda _: True
+    if kwargs: f = partial(f, **kwargs)
+    if negate: f = not_(f)
+    res = filter(f, iterable)
+    if gen: return res
+    return list(res)
+
+# %% ../nbs/01_basics.ipynb 164
+def range_of(a, b=None, step=None):
+    "All indices of collection `a`, if `a` is a collection, otherwise `range`"
+    if is_coll(a): a = len(a)
+    return list(range(a, b, step) if step is not None else range(a,b) if b is not None else range(a))
+
+# %% ../nbs/01_basics.ipynb 166
+def renumerate(iterable, start=0):
+    "Same as `enumerate`, but returns index as 2nd element instead of 1st"
+    return ((o,i) for i,o in enumerate(iterable, start=start))
+
+# %% ../nbs/01_basics.ipynb 168
+def only(o):
+    "Return the only item of `o`, raise if `o` doesn't have exactly one item"
+    it = iter(o)
+    try: res = next(it)
+    except StopIteration: raise ValueError('iterable has 0 items') from None
+    try: next(it)
+    except StopIteration: return res
+    raise ValueError('iterable has more than 1 item')
